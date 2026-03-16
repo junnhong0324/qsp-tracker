@@ -183,41 +183,29 @@
 <script>
 const PAGE_SIZE = 15;
 const CACHE_MS  = 2 * 3600e3;
-const BASE      = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/';
-const QUERIES   = [
+const WORKER = 'https://calm-king-40bf.junnhong0324.workers.dev';
+const QUERIES = [
   '"quantitative systems pharmacology"[Title/Abstract] AND "model"[Title/Abstract]',
   '"quantitative systems pharmacology"[Title/Abstract] AND "virtual patient"[Title/Abstract]',
   '"quantitative systems pharmacology"[Title/Abstract] AND "drug development"[Title/Abstract]',
   '"systems pharmacology" AND "mechanistic model"[Title/Abstract] AND "pharmacodynamics"[Title/Abstract]'
 ];
 
-// ── JSONP helper (no CORS proxy needed) ──────────────────
-let _n = 0;
-function jsonp(url) {
-  return new Promise((res, rej) => {
-    const cb = '__qsp' + (++_n);
-    const s  = document.createElement('script');
-    const id = setTimeout(() => { cleanup(); rej(new Error('timeout')); }, 20000);
-    function cleanup() { clearTimeout(id); try { delete window[cb]; } catch(e){} s.remove(); }
-    window[cb] = data => { cleanup(); res(data); };
-    s.onerror  = ()   => { cleanup(); rej(new Error('network error')); };
-    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
-    document.head.appendChild(s);
-  });
-}
-
 async function searchPMIDs(query) {
   const p = new URLSearchParams({ db:'pubmed', term:query, retmax:60, retmode:'json', sort:'pub_date' });
-  const d = await jsonp(BASE + 'esearch.fcgi?' + p);
+  const r = await fetch(`${WORKER}/esearch.fcgi?${p}`);
+  const d = await r.json();
   return d?.esearchresult?.idlist || [];
 }
 
 async function fetchSummary(pmids) {
   if (!pmids.length) return [];
   const p = new URLSearchParams({ db:'pubmed', id:pmids.join(','), retmode:'json' });
-  const d = await jsonp(BASE + 'esummary.fcgi?' + p);
-  const r = d?.result || {};
-  return (r.uids || pmids).map(id => r[id]).filter(a => a && a.uid);
+  const r = await fetch(`${WORKER}/esummary.fcgi?${p}`);
+  const d = await r.json();
+  const result = d?.result || {};
+  const uids = result.uids || pmids;
+  return uids.map(id => result[id]).filter(a => a && a.uid);
 }
 
 // ── Classification ───────────────────────────────────────
