@@ -1,0 +1,126 @@
+name: Daily QSP Model Check
+
+on:
+  schedule:
+    # 每天北京时间 9:00 运行（UTC 1:00）
+    - cron: '0 1 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  check-new-models:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Check PubMed for new QSP models
+        id: check
+        env:
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+        run: |
+          python3 << 'EOF'
+          import requests, json, os, datetime
+
+          QUERIES = [
+              '"quantitative systems pharmacology"[Title/Abstract] AND "model"[Title/Abstract]',
+              '"systems pharmacology" AND ("mechanistic model" OR "ODE model") AND "drug"',
+              '"quantitative systems pharmacology" AND ("virtual patient" OR "clinical trial simulation")',
+          ]
+
+          def search_pubmed(query, days=2):
+              url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+              params = {
+                  "db": "pubmed", "term": query, "retmax": 50,
+                  "retmode": "json", "sort": "pub_date",
+                  "datetype": "pdat", "reldate": days
+              }
+              r = requests.get(url, params=params, timeout=15)
+              return r.json().get("esearchresult", {}).get("idlist", [])
+
+          def fetch_summaries(pmids):
+              if not pmids: return []
+              url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
+              params = {"db": "pubmed", "id": ",".join(pmids), "retmode": "json"}
+              r = requests.get(url, params=params, timeout=15)
+              data = r.json().get("result", {})
+              return [data[p] for p in pmids if p in data]
+
+          # Search all queries, deduplicate
+          all_pmids = []
+          for q in QUERIES:
+              all_pmids.extend(search_pubmed(q, days=2))
+          unique_pmids = list(dict.fromkeys(all_pmids))
+
+          if not unique_pmids:
+              print("NO_NEW_ARTICLES")
+              with open(os.environ.get("GITHUB_OUTPUT",""), "a") as f:
+                  f.write("has_new=false\n")
+          else:
+              summaries = fetch_summaries(unique_pmids[:30])
+              articles = [
+                  {"pmid": s.get("uid",""), "title": s.get("title",""), "journal": s.get("fulljournalname",""), "doi": s.get("elocationid","").replace("doi: ","")}
+                  for s in summaries
+              ]
+              with open("new_articles.json", "w") as f:
+                  json.dump(articles, f, ensure_ascii=False, indent=2)
+              print(f"FOUND {len(articles)} new articles")
+              with open(os.environ.get("GITHUB_OUTPUT",""), "a") as f:
+                  f.write(f"has_new=true\n")
+                  f.write(f"count={len(articles)}\n")
+          EOF
+
+      - name: Send email notification
+        if: steps.check.outputs.has_new == 'true'
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          python3 << 'EOF'
+          import requests, json, os
+
+          with open("new_articles.json") as f:
+              articles = json.load(f)
+
+          rows = ""
+          for a in articles[:20]:
+              doi_link = f'<a href="https://doi.org/{a["doi"]}">{a["doi"]}</a>' if a.get("doi") else f'PMID {a["pmid"]}'
+              rows += f"""
+              <tr>
+                <td style="padding:10px 0;border-bottom:1px solid #1a1e26;">
+                  <a href="https://pubmed.ncbi.nlm.nih.gov/{a['pmid']}/" style="color:#4ade80;text-decoration:none;font-weight:500;">{a['title']}</a><br>
+                  <span style="color:#8890a4;font-size:12px;">{a['journal']} · {doi_link}</span>
+                </td>
+              </tr>"""
+
+          site = os.environ.get("SITE_URL","")
+          html = f"""
+          <div style="background:#0d0f12;color:#e8eaf0;font-family:'DM Sans',sans-serif;padding:32px;max-width:600px;margin:0 auto;border-radius:12px;">
+            <p style="color:#4ade80;font-size:11px;font-family:monospace;letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px;">▸ QSP Tracker</p>
+            <h2 style="font-size:20px;font-weight:600;margin-bottom:6px;">发现 {len(articles)} 篇新 QSP 模型</h2>
+            <p style="color:#8890a4;font-size:13px;margin-bottom:24px;">以下文献在过去 48 小时内收录至 PubMed</p>
+            <table style="width:100%;border-collapse:collapse;">{rows}</table>
+            {"<br><a href=" + site + " style='display:inline-block;margin-top:20px;padding:10px 20px;background:#4ade80;color:#0d0f12;border-radius:8px;text-decoration:none;font-weight:600;font-size:13px;'>在模型库中查看</a>" if site else ""}
+          </div>"""
+
+          payload = {{
+              "personalizations": [{{"to": [{{"email": os.environ["NOTIFY_EMAIL"]}}]}}],
+              "from": {{"email": "qsp-tracker@noreply.com", "name": "QSP Tracker"}},
+              "subject": f"[QSP Tracker] 发现 {len(articles)} 篇新模型",
+              "content": [{{"type": "text/html", "value": html}}]
+          }}
+
+          r = requests.post(
+              "https://api.sendgrid.com/v3/mail/send",
+              headers={{"Authorization": f"Bearer {os.environ['SENDGRID_API_KEY']}", "Content-Type": "application/json"}},
+              json=payload
+          )
+          print(f"Email sent: {r.status_code}")
+          EOF
