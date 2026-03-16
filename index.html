@@ -252,9 +252,9 @@ const PUBMED = 'https://corsproxy.io/?https://eutils.ncbi.nlm.nih.gov/entrez/eut
 
 const QUERIES = [
   '"quantitative systems pharmacology"[Title/Abstract] AND "model"[Title/Abstract]',
-  '"systems pharmacology" AND ("mechanistic model" OR "ODE model" OR "differential equation") AND "drug"',
-  '"quantitative systems pharmacology" AND ("virtual patient" OR "clinical trial simulation" OR "virtual population")',
-  'QSP AND ("cancer model" OR "immune model" OR "disease model") AND ("simulation" OR "pharmacodynamics")'
+  '"quantitative systems pharmacology"[Title/Abstract] AND "drug development"[Title/Abstract]',
+  '"quantitative systems pharmacology"[Title/Abstract] AND "virtual patient"[Title/Abstract]',
+  '"systems pharmacology" AND "mechanistic model"[Title/Abstract] AND "pharmacodynamics"[Title/Abstract]'
 ];
 
 // ═══════════════════════════════════════
@@ -272,7 +272,7 @@ let page = 1;
 // PubMed fetch
 // ═══════════════════════════════════════
 async function searchPMIDs(query) {
-  const p = new URLSearchParams({ db:'pubmed', term:query, retmax:50, retmode:'json', sort:'pub_date', datetype:'pdat', reldate:730 });
+  const p = new URLSearchParams({ db:'pubmed', term:query, retmax:60, retmode:'json', sort:'pub_date' });
   const r = await fetch(`${PUBMED}esearch.fcgi?${p}`);
   const d = await r.json();
   return d.esearchresult?.idlist || [];
@@ -337,8 +337,8 @@ function classify(title, pubtype) {
   if (/whole.body|multi.scale|integrated|comprehensive|complex/.test(t)) diff = 'high';
   else if (/simple|minimal|reduced|basic|two.compartment|one.compartment/.test(t)) diff = 'low';
 
-  // Is this actually a QSP/mechanistic model paper?
-  const isQSP = /model|simulation|mechanistic|pharmacodynamic|pharmacokinetic|differential|ODE|compartment|QSP/.test(t);
+  // Is this a QSP paper - always true since we're using targeted QSP queries
+  const isQSP = true;
 
   return { type, area, diseaseTag, hasCode, diff, isQSP };
 }
@@ -398,7 +398,6 @@ async function fetchAndRender(forceRefresh = false) {
           isRecent: isRecent(s.pubdate)
         };
       })
-      .filter(a => a.isQSP)
       .sort((a,b) => {
         if (a.isRecent && !b.isRecent) return -1;
         if (!a.isRecent && b.isRecent) return 1;
