@@ -411,14 +411,13 @@ html{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 <script>
 // ── Config ────────────────────────────────────────
 const PAGE_SIZE = 20;
-const CACHE_VER = 'v4';  // bump this to force cache invalidation
+const CACHE_VER = 'v5';  // bump this to force cache invalidation
 const CACHE_MS  = 2 * 3600e3;
 const WORKER    = 'https://calm-king-40bf.junnhong0324.workers.dev';
-const QUERIES   = [
-  '"quantitative systems pharmacology"[Title/Abstract] AND "model"[Title/Abstract]',
-  '"quantitative systems pharmacology"[Title/Abstract] AND "virtual patient"[Title/Abstract]',
-  '"quantitative systems pharmacology"[Title/Abstract] AND "drug development"[Title/Abstract]',
-  '"systems pharmacology" AND "mechanistic model"[Title/Abstract] AND "pharmacodynamics"[Title/Abstract]'
+// Single broad query captures ALL QSP literature (569 total)
+// Disease classification is done locally after retrieval — not at search time
+const QUERIES = [
+  '"quantitative systems pharmacology"[Title/Abstract]'
 ];
 
 // ── PubMed — full pagination ──────────────────────
