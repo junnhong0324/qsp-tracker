@@ -268,12 +268,16 @@ let extraFilters = { code: false, today: false };
 let searchQ = '';
 let page = 1;
 
+const PUBMED_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils/';
+const PROXY = 'https://corsproxy.io/?url=';
+
 // ═══════════════════════════════════════
 // PubMed fetch
 // ═══════════════════════════════════════
 async function searchPMIDs(query) {
   const p = new URLSearchParams({ db:'pubmed', term:query, retmax:60, retmode:'json', sort:'pub_date' });
-  const r = await fetch(`${PUBMED}esearch.fcgi?${p}`);
+  const url = `${PUBMED_BASE}esearch.fcgi?${p}`;
+  const r = await fetch(PROXY + encodeURIComponent(url));
   const d = await r.json();
   return d.esearchresult?.idlist || [];
 }
@@ -281,9 +285,13 @@ async function searchPMIDs(query) {
 async function fetchSummaries(pmids) {
   if (!pmids.length) return [];
   const p = new URLSearchParams({ db:'pubmed', id:pmids.join(','), retmode:'json' });
-  const r = await fetch(`${PUBMED}esummary.fcgi?${p}`);
+  const url = `${PUBMED_BASE}esummary.fcgi?${p}`;
+  const r = await fetch(PROXY + encodeURIComponent(url));
   const d = await r.json();
-  return pmids.map(id => d.result?.[id]).filter(Boolean);
+  // esummary returns { result: { uids: [...], "12345": {...}, ... } }
+  const result = d.result || {};
+  const uids = result.uids || pmids;
+  return uids.map(id => result[id]).filter(a => a && a.uid);
 }
 
 // ═══════════════════════════════════════
@@ -344,11 +352,13 @@ function classify(title, pubtype) {
 }
 
 function isRecent(dateStr) {
-  // "within this week" for the 'today' filter
   if (!dateStr) return false;
-  const d = new Date(String(dateStr).replace(/\s+/g,' '));
-  const now = new Date();
-  return (now - d) < 7 * 24 * 3600 * 1000;
+  try {
+    // esummary format: "2026 Mar" or "2026 Feb 17" or "2026"
+    const d = new Date(dateStr.replace(/(\d{4})\s+([A-Za-z]+)/, '$2 $1'));
+    if (isNaN(d)) return false;
+    return (Date.now() - d) < 14 * 24 * 3600 * 1000; // within 2 weeks
+  } catch(e) { return false; }
 }
 
 // ═══════════════════════════════════════
@@ -381,21 +391,26 @@ async function fetchAndRender(forceRefresh = false) {
     allArticles = summaries
       .filter(s => { if (seen.has(s.uid)) return false; seen.add(s.uid); return true; })
       .map(s => {
-        const cls = classify(s.title, s.pubtype);
+        const title = s.title || 'Untitled';
+        const pubtypes = s.pubtype || [];
+        const cls = classify(title, pubtypes);
+        // esummary fields: fulljournalname, pubdate, elocationid, pubtype
+        const pubdate = s.pubdate || '';
+        const year = pubdate.slice(0, 4);
+        const doi = (s.elocationid || '').replace('doi: ', '').trim();
         return {
           pmid: s.uid,
-          title: s.title || 'Untitled',
-          journal: (s.fulljournalname || s.source || '').split(':')[0],
-          year: String(s.pubdate || '').slice(0,4),
-          pubdate: s.pubdate || '',
-          doi: (s.elocationid || '').replace('doi: ','').trim(),
+          title,
+          journal: s.fulljournalname || s.source || '',
+          year,
+          pubdate,
+          doi,
           area: cls.area,
           type: cls.type,
-          isQSP: cls.isQSP,
           hasCode: cls.hasCode,
           diff: cls.diff,
           diseaseTag: cls.diseaseTag,
-          isRecent: isRecent(s.pubdate)
+          isRecent: isRecent(pubdate)
         };
       })
       .sort((a,b) => {
@@ -408,7 +423,13 @@ async function fetchAndRender(forceRefresh = false) {
     afterLoad();
   } catch(e) {
     document.getElementById('cards-grid').innerHTML =
-      `<div class="empty-state">⚠ 检索失败: ${e.message}<br><br>请检查网络连接后重试</div>`;
+      `<div class="empty-state">
+        ⚠ 检索失败: ${e.message}<br><br>
+        <span style="font-size:11px;color:var(--text3);">
+          可能原因：代理服务暂时不可用，或网络问题<br>
+          请打开浏览器控制台（F12 → Console）查看具体错误，然后告诉我
+        </span>
+      </div>`;
     setStatus('检索失败', '—', '—');
   }
 
