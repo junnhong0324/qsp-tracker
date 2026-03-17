@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QSP Model Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0a1628;
+  --navy2:#0f2044;
+  --navy3:#1a3260;
+  --blue:#1e5fad;
+  --blue2:#2471c8;
+  --blue-light:#e8f0fb;
+  --teal:#0d7a8a;
+  --teal-light:#e0f4f7;
+  --bg:#f5f7fa;
+  --bg2:#edf0f5;
+  --surface:#ffffff;
+  --border:#dce2ed;
+  --border2:#c8d1e4;
+  --text:#0f1e35;
+  --text2:#3a4f6e;
+  --text3:#6b7fa0;
+  --text4:#9aaac4;
+  --red:#c0392b; --red-l:#fdf0ef;
+  --purple:#6c3db5; --purple-l:#f2edfb;
+  --amber:#a0620a; --amber-l:#fdf6e8;
+  --green:#0a7a4a; --green-l:#e6f7ef;
+  --teal-d:#0d7a8a; --teal-l:#e0f7f9;
+  --sans:'Outfit',system-ui,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --r:6px; --r2:10px;
+}
+html{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
+
+/* ── Top bar ─────────────────────────── */
+.topbar{
+  background:var(--navy);
+  padding:0 32px;
+  height:56px;
+  display:flex;align-items:center;gap:24px;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 12px rgba(10,22,40,.35);
+}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand-icon{
+  width:28px;height:28px;
+  background:var(--blue2);
+  border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;color:white;font-family:var(--mono);
+  letter-spacing:-.03em;
+}
+.brand-name{font-size:15px;font-weight:600;color:white;letter-spacing:-.01em}
+.brand-div{width:1px;height:18px;background:rgba(255,255,255,.15)}
+.brand-sub{font-size:11px;color:rgba(255,255,255,.45);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+
+.search-bar{
+  display:flex;align-items:center;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:var(--r);
+  height:34px;overflow:hidden;
+  transition:all .2s;
+}
+.search-bar:focus-within{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.25)}
+.search-bar input{
+  background:transparent;border:none;outline:none;
+  padding:0 12px;color:white;font-family:var(--sans);font-size:13px;width:240px;
+}
+.search-bar input::placeholder{color:rgba(255,255,255,.35)}
+.search-bar svg{margin-right:10px;color:rgba(255,255,255,.35);flex-shrink:0}
+
+.tb-btn{
+  height:34px;padding:0 14px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:var(--r);
+  color:rgba(255,255,255,.75);
+  font-size:12px;font-family:var(--sans);font-weight:500;
+  cursor:pointer;display:flex;align-items:center;gap:6px;
+  transition:all .2s;white-space:nowrap;
+}
+.tb-btn:hover{background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.25)}
+.tb-btn.spin svg{animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.tb-time{font-size:11px;color:rgba(255,255,255,.3);font-family:var(--mono)}
+
+/* ── Disease tabs ────────────────────── */
+.disease-bar{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 32px;
+  display:flex;align-items:center;gap:2px;
+  overflow-x:auto;
+}
+.disease-bar::-webkit-scrollbar{height:0}
+.dtab{
+  padding:14px 16px 12px;
+  font-size:12px;font-weight:500;
+  color:var(--text3);cursor:pointer;
+  border-bottom:2px solid transparent;
+  background:none;border-top:none;border-left:none;border-right:none;
+  font-family:var(--sans);white-space:nowrap;
+  transition:all .15s;
+}
+.dtab:hover{color:var(--text2)}
+.dtab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+.dtab .n{
+  display:inline-block;
+  font-size:10px;font-family:var(--mono);
+  color:var(--text4);margin-left:4px;
+}
+.dtab.active .n{color:var(--blue2)}
+
+/* ── Layout ──────────────────────────── */
+.layout{display:grid;grid-template-columns:248px 1fr;min-height:calc(100vh - 97px)}
+
+/* ── Sidebar ─────────────────────────── */
+.sidebar{
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  padding:20px 0;
+}
+.sb-head{
+  font-size:10px;font-weight:600;
+  letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text4);padding:0 20px 8px;
+  font-family:var(--mono);
+}
+.sb-group{margin-bottom:22px}
+
+.chk{
+  display:flex;align-items:center;gap:9px;
+  padding:7px 20px;cursor:pointer;
+  color:var(--text2);font-size:13px;
+  user-select:none;transition:background .12s;
+}
+.chk:hover{background:var(--bg)}
+.chkbox{
+  width:15px;height:15px;flex-shrink:0;
+  border:1.5px solid var(--border2);
+  border-radius:3px;background:var(--surface);
+  display:flex;align-items:center;justify-content:center;
+  font-size:9px;transition:all .15s;
+}
+.chk.on .chkbox{background:var(--blue);border-color:var(--blue);color:white}
+.chk.on{color:var(--text)}
+
+.divider{height:1px;background:var(--border);margin:4px 0 16px}
+
+.sub-card{
+  margin:0 16px;padding:16px;
+  background:var(--navy);
+  border-radius:var(--r2);
+}
+.sub-card p{font-size:12px;color:rgba(255,255,255,.55);line-height:1.6;margin-bottom:12px}
+.sub-card input{
+  width:100%;padding:8px 10px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:var(--r);
+  color:white;font-size:12px;font-family:var(--sans);outline:none;
+  margin-bottom:8px;transition:border-color .15s;
+}
+.sub-card input:focus{border-color:var(--blue2)}
+.sub-card input::placeholder{color:rgba(255,255,255,.3)}
+.sub-card button{
+  width:100%;padding:9px;
+  background:var(--blue2);border:none;
+  border-radius:var(--r);
+  color:white;font-size:12px;font-weight:600;
+  cursor:pointer;font-family:var(--sans);
+  transition:background .15s;
+}
+.sub-card button:hover{background:var(--blue)}
+.sub-st{font-size:11px;color:#6ee7b7;margin-top:6px;font-family:var(--mono);min-height:14px}
+
+/* ── Main content ────────────────────── */
+.main{min-width:0}
+
+.statline{
+  padding:10px 24px;
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:16px;
+  background:var(--surface);
+}
+.live{width:6px;height:6px;border-radius:50%;background:#22c55e;animation:pulse 2.5s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.stat-txt{font-size:12px;color:var(--text3);font-family:var(--mono)}
+.stat-div{width:1px;height:12px;background:var(--border)}
+.stat-n{font-size:12px;color:var(--text2);font-family:var(--mono);font-weight:500}
+
+/* ── Cards ───────────────────────────── */
+#grid{padding:16px 24px;display:flex;flex-direction:column;gap:10px}
+
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r2);
+  padding:16px 20px;
+  transition:all .18s;
+  animation:up .2s ease;
+}
+.card:hover{border-color:var(--border2);box-shadow:0 2px 12px rgba(10,22,40,.07);transform:translateY(-1px)}
+.card.new-card{border-left:3px solid var(--blue2)}
+@keyframes up{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:9px}
+.card-tags{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.card-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.card-year{font-size:11px;color:var(--text4);font-family:var(--mono)}
+
+.tag{
+  font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;
+  letter-spacing:.03em;white-space:nowrap;font-family:var(--mono);
+}
+.t-oncology  {background:var(--red-l);   color:var(--red)}
+.t-autoimmune{background:var(--purple-l);color:var(--purple)}
+.t-metabolic {background:var(--amber-l); color:var(--amber)}
+.t-cardio    {background:var(--blue-light);color:var(--blue)}
+.t-neuro     {background:var(--teal-l);  color:var(--teal-d)}
+.t-renal     {background:var(--green-l); color:var(--green)}
+.t-infectious{background:#fdf2f8;        color:#9d174d}
+.t-other     {background:var(--bg2);     color:var(--text3)}
+.t-new       {background:var(--navy);    color:white}
+.t-code      {background:var(--blue-light);color:var(--blue2)}
+.t-review    {background:var(--bg2);     color:var(--text4)}
+
+.card-title{
+  font-size:14px;font-weight:500;color:var(--text);
+  line-height:1.45;margin-bottom:8px;letter-spacing:-.01em;
+}
+.card-title a{color:inherit;text-decoration:none}
+.card-title a:hover{color:var(--blue2)}
+
+.card-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.meta-journal{font-size:12px;color:var(--text3);font-weight:500}
+.meta-dot{color:var(--border2)}
+.meta-doi{font-size:11px;color:var(--blue);font-family:var(--mono)}
+.meta-doi a{color:inherit;text-decoration:none}
+.meta-doi a:hover{text-decoration:underline}
+
+.badge{
+  font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;
+  font-family:var(--mono);white-space:nowrap;
+}
+.b-easy{background:#dcfce7;color:#15803d}
+.b-med {background:#fef9c3;color:#a16207}
+.b-hard{background:#fee2e2;color:#b91c1c}
+.b-orig{background:var(--blue-light);color:var(--blue)}
+.b-ext {background:var(--teal-l);color:var(--teal-d)}
+.b-rev {background:var(--bg2);color:var(--text4)}
+
+/* State */
+.state-box{text-align:center;padding:80px 24px;color:var(--text3);font-family:var(--mono);font-size:13px}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--blue2);border-radius:50%;animation:rot .7s linear infinite;margin:0 auto 16px}
+.prog-wrap{width:180px;height:3px;background:var(--border);border-radius:3px;margin:14px auto 0;overflow:hidden}
+.prog-bar{height:100%;background:var(--blue2);width:0;transition:width .4s ease;border-radius:3px}
+
+/* Pager */
+.pager{
+  padding:20px 24px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+}
+.pg-btn{
+  min-width:32px;height:32px;padding:0 10px;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);color:var(--text2);
+  font-size:12px;font-family:var(--mono);cursor:pointer;
+  transition:all .15s;
+}
+.pg-btn:hover:not(:disabled){border-color:var(--blue2);color:var(--blue2);background:var(--blue-light)}
+.pg-btn:disabled{opacity:.35;cursor:default}
+.pg-btn.cur{background:var(--blue2);color:white;border-color:var(--blue2)}
+.pg-info{font-size:11px;color:var(--text4);font-family:var(--mono);margin-left:10px}
+
+.toast{
+  position:fixed;bottom:24px;right:24px;
+  background:var(--navy2);color:white;
+  padding:11px 16px;border-radius:var(--r2);
+  font-size:12px;font-family:var(--sans);
+  box-shadow:0 4px 20px rgba(10,22,40,.3);
+  opacity:0;pointer-events:none;transition:opacity .3s;z-index:999;
+}
+.toast.on{opacity:1}
+
+@media(max-width:700px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{border-right:none;border-bottom:1px solid var(--border)}
+  #grid{padding:12px}
+  .topbar{padding:0 16px}
+  .disease-bar{padding:0 12px}
+}
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">QS</div>
+    <span class="brand-name">QSP Tracker</span>
+    <div class="brand-div"></div>
+    <span class="brand-sub">Model Intelligence</span>
+  </div>
+  <div class="topbar-right">
+    <div class="search-bar">
+      <input type="text" id="q" placeholder="Search models, targets, journals…" oninput="doSearch()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    </div>
+    <button class="tb-btn" id="rbtn" onclick="load(true)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+      Refresh
+    </button>
+    <span class="tb-time" id="last-upd">—</span>
+  </div>
+</header>
+
+<!-- Disease tabs -->
+<nav class="disease-bar">
+  <button class="dtab active" data-area="all"        onclick="setArea('all')">All Models    <span class="n" id="c-all">—</span></button>
+  <button class="dtab" data-area="oncology"          onclick="setArea('oncology')">Oncology   <span class="n" id="c-oncology">—</span></button>
+  <button class="dtab" data-area="autoimmune"        onclick="setArea('autoimmune')">Autoimmune <span class="n" id="c-autoimmune">—</span></button>
+  <button class="dtab" data-area="metabolic"         onclick="setArea('metabolic')">Metabolic  <span class="n" id="c-metabolic">—</span></button>
+  <button class="dtab" data-area="cardio"            onclick="setArea('cardio')">Cardiovascular <span class="n" id="c-cardio">—</span></button>
+  <button class="dtab" data-area="neuro"             onclick="setArea('neuro')">Neuroscience <span class="n" id="c-neuro">—</span></button>
+  <button class="dtab" data-area="renal"             onclick="setArea('renal')">Renal        <span class="n" id="c-renal">—</span></button>
+  <button class="dtab" data-area="infectious"        onclick="setArea('infectious')">Infectious <span class="n" id="c-infectious">—</span></button>
+  <button class="dtab" data-area="other"             onclick="setArea('other')">Other        <span class="n" id="c-other">—</span></button>
+</nav>
+
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sb-group">
+      <div class="sb-head">Publication Type</div>
+      <label class="chk on" id="k-original"  onclick="toggleType('original')"> <span class="chkbox">✓</span>Original model</label>
+      <label class="chk on" id="k-extension" onclick="toggleType('extension')"><span class="chkbox">✓</span>Extension / application</label>
+      <label class="chk"    id="k-review"    onclick="toggleType('review')">   <span class="chkbox"> </span>Review (hidden by default)</label>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="sb-group">
+      <div class="sb-head">Quick Filter</div>
+      <label class="chk" id="k-code"   onclick="toggleX('code')">  <span class="chkbox"> </span>Code / software available</label>
+      <label class="chk" id="k-recent" onclick="toggleX('recent')"><span class="chkbox"> </span>Published last 2 weeks</label>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="sb-group">
+      <div class="sb-head">Reproduction Difficulty</div>
+      <label class="chk on" id="k-easy"   onclick="toggleDiff('easy')">  <span class="chkbox">✓</span>Low complexity</label>
+      <label class="chk on" id="k-medium" onclick="toggleDiff('medium')"><span class="chkbox">✓</span>Moderate complexity</label>
+      <label class="chk on" id="k-hard"   onclick="toggleDiff('hard')">  <span class="chkbox">✓</span>High complexity</label>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="padding:0 16px">
+      <div class="sub-card">
+        <p>Receive daily email alerts when new QSP models are indexed in PubMed.</p>
+        <input type="email" id="sub-em" placeholder="you@pharma.com">
+        <button onclick="subscribe()">Subscribe to Alerts</button>
+        <div class="sub-st" id="sub-st"></div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="statline">
+      <span class="live"></span>
+      <span class="stat-txt" id="st-txt">Connecting to PubMed…</span>
+      <span class="stat-div"></span>
+      <span class="stat-n" id="st-n">—</span>
+      <span class="stat-div"></span>
+      <span class="stat-txt" id="st-d">—</span>
+    </div>
+
+    <div id="grid">
+      <div class="state-box">
+        <div class="spinner"></div>
+        <div>Retrieving QSP models from PubMed…</div>
+        <div class="prog-wrap"><div class="prog-bar" id="prog-f"></div></div>
+      </div>
+    </div>
+
+    <div class="pager" id="pager" style="display:none">
+      <button class="pg-btn" id="pb-prev" onclick="flip(-1)" disabled>←</button>
+      <span id="pg-btns"></span>
+      <button class="pg-btn" id="pb-next" onclick="flip(1)">→</button>
+      <span class="pg-info" id="pg-inf"></span>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Config ────────────────────────────────────────
+const PAGE_SIZE = 20;
+const CACHE_VER = 'v5';  // bump this to force cache invalidation
+const CACHE_MS  = 2 * 3600e3;
+const WORKER    = 'https://calm-king-40bf.junnhong0324.workers.dev';
+// Single broad query captures ALL QSP literature (569 total)
+// Disease classification is done locally after retrieval — not at search time
+const QUERIES = [
+  '"quantitative systems pharmacology"[Title/Abstract]'
+];
+
+// ── PubMed — full pagination ──────────────────────
+async function searchAllPMIDs(query) {
+  const allIds = [];
+  const retmax = 200;
+
+  // Page 1 + get total count
+  const p0 = new URLSearchParams({db:'pubmed',term:query,retmax:retmax,retmode:'json',sort:'pub_date',retstart:0});
+  const r0  = await fetch(WORKER + '/esearch.fcgi?' + p0);
+  const d0  = await r0.json();
+  const ids0 = d0?.esearchresult?.idlist || [];
+  const total = parseInt(d0?.esearchresult?.count || '0', 10);
+  allIds.push(...ids0);
+
+  // Remaining pages
+  let retstart = retmax;
+  while (retstart < total && allIds.length < 800) {
+    const p = new URLSearchParams({db:'pubmed',term:query,retmax:retmax,retmode:'json',sort:'pub_date',retstart:retstart});
+    const r = await fetch(WORKER + '/esearch.fcgi?' + p);
+    const d = await r.json();
+    const ids = d?.esearchresult?.idlist || [];
+    if (!ids.length) break;
+    allIds.push(...ids);
+    retstart += retmax;
+  }
+  return allIds;
+}
+
+async function fetchSummary(pmids) {
+  if (!pmids.length) return [];
+  const p = new URLSearchParams({db:'pubmed',id:pmids.join(','),retmode:'json'});
+  const r = await fetch(WORKER + '/esummary.fcgi?' + p);
+  const d = await r.json();
+  const result = d?.result || {};
+  const uids   = result.uids || pmids;
+  return uids.map(id => result[id]).filter(a => a && a.uid);
+}
+
+// ── Classify ──────────────────────────────────────
+function classify(title, pubtype) {
+  const t  = (title||'').toLowerCase();
+  const pt = (Array.isArray(pubtype)?pubtype:[]).join(' ').toLowerCase();
+
+  let type = 'original';
+  if (/\breview\b|systematic review|meta-analysis|overview|landscape|perspective/.test(t)||pt.includes('review')||pt.includes('systematic')) type='review';
+  else if (/extend|adapt|refine|update|improv|application|appl/.test(t)) type='extension';
+
+  let area = 'other';
+  if (/cancer|tumor|tumour|oncol|checkpoint|pd-1|pd-l1|car-t|breast|lung|leukemia|lymphoma|melanoma|hepatocellular|colorectal|immuno.*therap/.test(t)) area='oncology';
+  else if (/rheumat|autoimmun|lupus|\bibd\b|crohn|colitis|psoriasis|multiple sclerosis|arthrit/.test(t)) area='autoimmune';
+  else if (/nafld|nash|diabet|obesity|lipid|metabol|insulin|glucose|t2dm|fatty liver/.test(t)) area='metabolic';
+  else if (/cardiac|heart|cardiovasc|atheroscler|hypertens|coronary|arrhythmia|pcsk9|ldl/.test(t)) area='cardio';
+  else if (/neuro|alzheimer|parkinson|brain|\bcns\b|dopamine|serotonin|epilep|dementia|amyloid|clozapine|valproic/.test(t)) area='neuro';
+  else if (/renal|kidney|nephro|\bckd\b/.test(t)) area='renal';
+  else if (/covid|sars|hiv|influenza|hepatitis|infect|viral|malaria/.test(t)) area='infectious';
+
+  const tags=[
+    ['TNBC','triple.negative breast'],['NSCLC','non.small.cell lung'],
+    ['IBD','inflammatory bowel'],['T2DM','type 2 diabet'],
+    ['NAFLD','non.alcoholic fatty'],['NASH','\\bnash\\b'],
+    ['COVID-19','covid|sars-cov'],['RA','rheumatoid arthrit'],
+    ['CKD','chronic kidney'],['Alzheimer','alzheimer'],
+    ['HCC','hepatocellular'],['CAR-T','car-t'],
+    ['PD-1/L1','pd-1|pd-l1'],['PBPK','physiologically based'],
+    ['Atherosclerosis','atheroscler'],['PCSK9','pcsk9'],
+    ['Valproic Acid','valproic'],['Clozapine','clozapine'],
+    ['Parkinson','parkinson'],['Epilepsy','epilep'],
+    ['TMDD','target.mediated']
+  ];
+  let tag='QSP';
+  for(const[lb,pat]of tags){if(new RegExp(pat,'i').test(t)){tag=lb;break;}}
+
+  const hasCode=/github|code available|open.source|matlab|python|r package|zenodo|supplementary/.test(t);
+  let diff='medium';
+  if(/whole.body|multi.scale|integrated|comprehensive/.test(t)) diff='hard';
+  else if(/simple|minimal|two.compartment|one.compartment/.test(t)) diff='easy';
+
+  return {type,area,tag,hasCode,diff};
+}
+
+function isRecent(pubdate){
+  if(!pubdate) return false;
+  const s=String(pubdate);
+  const y=parseInt(s.slice(0,4),10);
+  const mo=s.slice(5,8);
+  const m={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11}[mo]??0;
+  return(Date.now()-new Date(y,m,1))<14*24*3600e3;
+}
+
+// ── State ─────────────────────────────────────────
+let all=[],filtered=[];
+let curArea='all';
+let types={original:true,extension:true,review:false};
+let extras={code:false,recent:false};
+let diffs={easy:true,medium:true,hard:true};
+let qStr='',pg=1;
+
+// ── Load ──────────────────────────────────────────
+async function load(force){
+  if(!force){
+    const c=getCache();
+    if(c){all=c;afterLoad('cache');return;}
+  }
+  // Clear old cache immediately
+  localStorage.removeItem('qsp_d');
+  localStorage.removeItem('qsp_t');
+
+  document.getElementById('rbtn').classList.add('spin');
+  setStat('Searching PubMed…','—','—');
+  showSpinner();setP(5);
+
+  try{
+    // Run 4 queries in parallel, each with full pagination
+    setStat('Running 4 search strategies…','—','—');
+    const sets=await Promise.all(QUERIES.map(searchAllPMIDs));
+    const unique=[...new Set(sets.flat())];
+    setStat('Fetching details for '+unique.length+' records…','—','—');
+    setP(35);
+
+    // Batch fetch metadata (20 per request)
+    const batches=[];
+    for(let i=0;i<unique.length;i+=20) batches.push(unique.slice(i,i+20));
+
+    // Process in groups of 5 concurrent requests to avoid rate limiting
+    const rows=[];
+    for(let i=0;i<batches.length;i+=5){
+      const chunk=batches.slice(i,i+5);
+      const res=await Promise.all(chunk.map(fetchSummary));
+      rows.push(...res.flat());
+      setP(35+Math.round(60*(i+5)/batches.length));
+    }
+    setP(95);
+
+    const seen=new Set();
+    all=rows
+      .filter(s=>{if(seen.has(s.uid))return false;seen.add(s.uid);return true;})
+      .map(s=>{
+        const c=classify(s.title,s.pubtype);
+        return{
+          pmid:s.uid,
+          title:s.title||'Untitled',
+          journal:s.fulljournalname||s.source||'',
+          year:String(s.pubdate||'').slice(0,4),
+          pubdate:s.pubdate||'',
+          doi:(s.elocationid||'').replace('doi: ','').trim(),
+          area:c.area,type:c.type,tag:c.tag,
+          hasCode:c.hasCode,diff:c.diff,
+          recent:isRecent(s.pubdate)
+        };
+      })
+      .sort((a,b)=>{
+        if(a.recent&&!b.recent)return -1;
+        if(!a.recent&&b.recent)return 1;
+        return(b.year||0)-(a.year||0);
+      });
+
+    setP(100);
+    saveCache(all);
+    afterLoad('live');
+  }catch(e){
+    document.getElementById('grid').innerHTML=
+      '<div class="state-box">Error: '+e.message+'<br><small style="color:var(--text4);margin-top:8px;display:block">Open browser console (F12) for details</small></div>';
+    setStat('Error','—','—');
+  }
+  document.getElementById('rbtn').classList.remove('spin');
+}
+
+function afterLoad(src){
+  updateCounts();applyFilter();
+  const n=new Date();
+  const ts=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0')
+    +' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('last-upd').textContent=ts+(src==='cache'?' (cached)':'');
+  if(src==='cache') toast('Loaded from cache · Click Refresh for latest results');
+}
+
+// ── Filter ────────────────────────────────────────
+function applyFilter(){
+  const q=qStr.toLowerCase();
+  filtered=all.filter(a=>{
+    if(curArea!=='all'&&a.area!==curArea) return false;
+    if(a.type==='review'   &&!types.review)   return false;
+    if(a.type==='original' &&!types.original) return false;
+    if(a.type==='extension'&&!types.extension)return false;
+    if(extras.code  &&!a.hasCode) return false;
+    if(extras.recent&&!a.recent)  return false;
+    if(!diffs[a.diff]) return false;
+    if(q&&!a.title.toLowerCase().includes(q)&&!a.journal.toLowerCase().includes(q)&&!a.tag.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  pg=1;render();
+  setStat(
+    filtered.length+' models'+(curArea!=='all'?' · '+curArea:''),
+    filtered.length+' / '+all.length,
+    new Date().toISOString().slice(0,10)
+  );
+}
+
+// ── Render ────────────────────────────────────────
+function render(){
+  const grid=document.getElementById('grid');
+  const start=(pg-1)*PAGE_SIZE;
+  const slice=filtered.slice(start,start+PAGE_SIZE);
+  const total=Math.ceil(filtered.length/PAGE_SIZE);
+
+  if(!slice.length){
+    grid.innerHTML='<div class="state-box">No records match the current filters.</div>';
+    document.getElementById('pager').style.display='none';
+    return;
+  }
+  grid.innerHTML=slice.map(mkCard).join('');
+
+  const pager=document.getElementById('pager');
+  if(total>1){
+    pager.style.display='flex';
+    document.getElementById('pb-prev').disabled=(pg===1);
+    document.getElementById('pb-next').disabled=(pg===total);
+    document.getElementById('pg-inf').textContent='Page '+pg+' of '+total+' · '+filtered.length+' results';
+    const btns=document.getElementById('pg-btns');
+    const lo=Math.max(1,pg-2),hi=Math.min(total,pg+2);
+    let h='';
+    if(lo>1) h+='<button class="pg-btn" onclick="goPage(1)">1</button>';
+    if(lo>2) h+='<span style="padding:0 4px;color:var(--text4);font-size:12px">…</span>';
+    for(let i=lo;i<=hi;i++) h+='<button class="pg-btn'+(i===pg?' cur':'')+'" onclick="goPage('+i+')">'+i+'</button>';
+    if(hi<total-1) h+='<span style="padding:0 4px;color:var(--text4);font-size:12px">…</span>';
+    if(hi<total) h+='<button class="pg-btn" onclick="goPage('+total+')">'+total+'</button>';
+    btns.innerHTML=h;
+  }else{pager.style.display='none';}
+}
+
+function mkCard(a){
+  const dc={easy:'b-easy',medium:'b-med',hard:'b-hard'}[a.diff]||'b-med';
+  const dl={easy:'Low complexity',medium:'Moderate',hard:'High complexity'}[a.diff]||'Moderate';
+  const tc={original:'b-orig',extension:'b-ext',review:'b-rev'}[a.type]||'b-orig';
+  const tl={original:'Original',extension:'Extension',review:'Review'}[a.type]||a.type;
+  const doi=a.doi
+    ?'<a href="https://doi.org/'+a.doi+'" target="_blank">'+a.doi.substring(0,48)+'</a>'
+    :'PMID '+a.pmid;
+  return '<div class="card'+(a.recent?' new-card':'')+'">'+
+    '<div class="card-head">'+
+      '<div class="card-tags">'+
+        (a.recent?'<span class="tag t-new">New</span>':'')+
+        '<span class="tag t-'+a.area+'">'+a.tag+'</span>'+
+        (a.type==='review'?'<span class="tag t-review">Review</span>':'')+
+        (a.hasCode?'<span class="tag t-code">Code</span>':'')+
+      '</div>'+
+      '<div class="card-right">'+
+        '<span class="card-year">'+a.year+'</span>'+
+      '</div>'+
+    '</div>'+
+    '<div class="card-title"><a href="https://pubmed.ncbi.nlm.nih.gov/'+a.pmid+'/" target="_blank">'+a.title+'</a></div>'+
+    '<div class="card-meta" style="margin-bottom:10px">'+
+      '<span class="meta-journal">'+a.journal.substring(0,50)+'</span>'+
+      '<span class="meta-dot">·</span>'+
+      '<span class="meta-doi">'+doi+'</span>'+
+    '</div>'+
+    '<div style="display:flex;gap:6px">'+
+      '<span class="badge '+dc+'">'+dl+'</span>'+
+      '<span class="badge '+tc+'">'+tl+'</span>'+
+    '</div>'+
+  '</div>';
+}
+
+// ── Controls ──────────────────────────────────────
+function setArea(a){
+  curArea=a;
+  document.querySelectorAll('.dtab').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-area="'+a+'"]')?.classList.add('active');
+  applyFilter();
+}
+function toggleType(t){
+  types[t]=!types[t];
+  const el=document.getElementById('k-'+t);
+  el.classList.toggle('on',types[t]);
+  el.querySelector('.chkbox').textContent=types[t]?'✓':' ';
+  applyFilter();
+}
+function toggleX(k){
+  extras[k]=!extras[k];
+  const el=document.getElementById('k-'+k);
+  el.classList.toggle('on',extras[k]);
+  el.querySelector('.chkbox').textContent=extras[k]?'✓':' ';
+  applyFilter();
+}
+function toggleDiff(k){
+  diffs[k]=!diffs[k];
+  const el=document.getElementById('k-'+k);
+  el.classList.toggle('on',diffs[k]);
+  el.querySelector('.chkbox').textContent=diffs[k]?'✓':' ';
+  applyFilter();
+}
+function doSearch(){qStr=document.getElementById('q').value;applyFilter();}
+function flip(d){goPage(pg+d);}
+function goPage(n){
+  pg=Math.max(1,Math.min(Math.ceil(filtered.length/PAGE_SIZE),n));
+  render();window.scrollTo(0,0);
+}
+function setStat(t,n,d){
+  document.getElementById('st-txt').textContent=t;
+  document.getElementById('st-n').textContent=n;
+  document.getElementById('st-d').textContent=d;
+}
+function updateCounts(){
+  ['all','oncology','autoimmune','metabolic','cardio','neuro','renal','infectious','other'].forEach(a=>{
+    const el=document.getElementById('c-'+a);
+    if(el) el.textContent=a==='all'?all.length:all.filter(x=>x.area===a).length;
+  });
+}
+function showSpinner(){
+  document.getElementById('grid').innerHTML=
+    '<div class="state-box"><div class="spinner"></div><div>Retrieving QSP models from PubMed…</div>'+
+    '<div class="prog-wrap"><div class="prog-bar" id="prog-f"></div></div></div>';
+  document.getElementById('pager').style.display='none';
+}
+function setP(pct){const el=document.getElementById('prog-f');if(el)el.style.width=pct+'%';}
+function subscribe(){
+  const em=document.getElementById('sub-em').value.trim();
+  const st=document.getElementById('sub-st');
+  if(!em.includes('@')){st.textContent='Please enter a valid email.';st.style.color='#fca5a5';return;}
+  const subs=JSON.parse(localStorage.getItem('qsp_subs')||'[]');
+  if(!subs.includes(em)){subs.push(em);localStorage.setItem('qsp_subs',JSON.stringify(subs));}
+  st.textContent='✓ Subscribed';
+  document.getElementById('sub-em').value='';
+  toast('Subscribed. Configure GitHub Actions for daily delivery.');
+}
+function toast(msg){
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');
+  setTimeout(()=>t.classList.remove('on'),3500);
+}
+function saveCache(d){
+  try{
+    localStorage.setItem('qsp_d_'+CACHE_VER,JSON.stringify(d));
+    localStorage.setItem('qsp_t_'+CACHE_VER,Date.now());
+  }catch(e){}
+}
+function getCache(){
+  try{
+    const ts=parseInt(localStorage.getItem('qsp_t_'+CACHE_VER)||'0',10);
+    if(Date.now()-ts>CACHE_MS) return null;
+    const d=localStorage.getItem('qsp_d_'+CACHE_VER);
+    return d?JSON.parse(d):null;
+  }catch(e){return null;}
+}
+
+load();
+</script>
+</body>
+</html>
